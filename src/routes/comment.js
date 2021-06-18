@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto"
 import S from "fluent-json-schema"
 import { add, read } from "../stream.js"
+import httpErrors from "http-errors"
 
 const schema = {
   body: S.object()
@@ -19,6 +20,7 @@ const eventSchema = S.object()
       .prop("id", S.string().format(S.FORMATS.UUID).required())
       .prop("timestamp", S.string().required())
       .prop("payloadVersion", S.integer().required())
+      .prop("revision", S.integer().required())
       .prop("author", S.string().format(S.FORMATS.UUID).required())
   )
   .prop(
@@ -43,6 +45,7 @@ export default async function comment(fastify) {
         id: randomUUID(),
         timestamp: `${new Date().valueOf()}`,
         payloadVersion: 1,
+        revision: 1,
         author,
       },
       payload: {
@@ -58,31 +61,42 @@ export default async function comment(fastify) {
 
   fastify.put("/comment/:commentId", { schema }, async (req) => {
     let { author, body, topic } = req.body
+    let { commentId } = req.params
 
-    const x = await consumeEvents("commentable", 0)
+    const redisStream = await consumeEvents("commentable", 0)
+    const filteredStream = redisStream.filter(
+      (item) => item.aggregate === commentId
+    )
 
-    // console.log(x[0][1].map((y) => y[1]))
+    // TODO apply commit events (filteredStream) to a base object
+
+    // Only the author of the original comment can update
+    if (filteredStream[0].meta.author !== author) {
+      console.log(filteredStream[0].meta.author, author)
+      throw httpErrors.Unauthorized()
+    }
+
+    let event = {
+      aggregate: commentId,
+      stream: "commentable",
+      event: "commentUpdated",
+      meta: {
+        id: randomUUID(),
+        timestamp: `${new Date().valueOf()}`,
+        payloadVersion: 1,
+        revision: filteredStream.length,
+        author,
+      },
+      payload: {
+        topic,
+        body,
+      },
+    }
+
+    let [[, eventId]] = await produceEvent(event)
 
     return {}
   })
 }
 
 // http put :3000/comment/72c4977c-b3d4-4c99-9346-23f4ec2c418e author=e3bc1019-7c99-4be7-95be-a464e2b9c2f8 topic=e3bc1019-7c99-4be7-95be-a464e2b9c2f8 body=11
-//Redis.Command.setArgumentTransformer('xadd', function (args) {
-//   if (args.length === 3) {
-//     const argArray = [];
-//
-//     argArray.push(args[0], args[1]); // Key Name & ID.
-//
-//     // Transform object into array of field name then value.
-//     const fieldNameValuePairs = args[2];
-//
-//     for (const fieldName in fieldNameValuePairs) {
-//       argArray.push(fieldName, fieldNameValuePairs[fieldName]);
-//     }
-//
-//     return argArray;
-//   }
-//
-//   return args;
-// });

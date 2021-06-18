@@ -41,13 +41,16 @@ redis.Command.setReplyTransformer("xread", function (result) {
       id: r[0],
     }
 
-    let fieldNamesValues = r[1]
+    let namesValues = r[1]
 
-    for (let n = 0; n < fieldNamesValues.length; n += 2) {
-      let k = fieldNamesValues[n]
-      let v = JSON.parse(fieldNamesValues[n + 1])
+    for (let n = 0; n < namesValues.length; n += 2) {
+      let value = namesValues[n + 1]
 
-      obj[k] = v
+      try {
+        value = JSON.parse(value)
+      } catch (err) {}
+
+      obj[namesValues[n]] = value
     }
 
     newResult.push(obj)
@@ -96,6 +99,22 @@ export function stringifyNestedObjects(obj) {
   }
 }
 
+// TODO we probably want to have a separate instance of
+// the redis client here. This comes from the subscribe
+export function saveProjection(redisClient, schema = {}) {
+  const validate = ajv.compile(schema)
+
+  return function (projection) {
+    let valid = validate(projection)
+    if (!valid) throw new Error(JSON.stringify(validate.errors))
+
+    return redisClient
+      .pipeline()
+      .set(projection.id, JSON.stringify(projection))
+      .exec()
+  }
+}
+
 export async function subscribe(stream, callback) {
   let client = redis.createClient(config)
   let lastId = "$"
@@ -115,11 +134,13 @@ export async function subscribe(stream, callback) {
     )
     if (!redisStream) continue
 
-    let results = redisStream[0][1]
+    let results = redisStream
     if (!results.length) continue
 
-    callback(results)
-    lastId = results[results.length - 1][0]
+    // TODO either get rid of this redis client,
+    // or create a new one and send that along
+    callback(results, client)
+    lastId = results[results.length - 1].id
   }
 }
 
