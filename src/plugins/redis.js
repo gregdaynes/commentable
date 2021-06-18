@@ -1,8 +1,8 @@
 import fp from "fastify-plugin"
 import fastifyRedis from "fastify-redis"
-import stream from "../stream.js"
+import { config } from "../stream.js"
 
-const { host, port } = stream.config
+const { host, port } = config
 
 export default fp(async (fastify) => {
   await fastify.register(fastifyRedis, {
