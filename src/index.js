@@ -3,23 +3,23 @@ import Fastify from "fastify"
 import autoload from "fastify-autoload"
 
 export default async function buildServer(config) {
-  const opts = {
+  const options = {
     ...config,
     logger: {
       level: config.LOG_LEVEL,
     },
   }
 
-  const fastify = Fastify(opts)
+  const fastify = Fastify(options)
 
   fastify.register(autoload, {
     dir: join(import.meta.url, "plugins"),
-    options: opts,
+    options,
   })
 
   fastify.register(autoload, {
     dir: join(import.meta.url, "routes"),
-    options: opts,
+    options,
   })
 
   fastify.log.info(`${config.APP_NAME} is starting!`)

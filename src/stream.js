@@ -1,130 +1,43 @@
-import redis from "ioredis"
 import { join } from "desm"
-import Ajv from "ajv"
-import addFormats from "ajv-formats"
-import Config from "../config.js"
+import Redis from "./lib/redis.js"
+import validation from "./lib/validation.js"
+import config from "../config.js"
 
-export const config = {
-  host: Config.REDIS_HOST,
-  port: Config.REDIS_PORT,
-}
+export function add(schema) {
+  let validate = schema ? validation.compile(schema) : undefined
 
-const ajv = new Ajv()
-addFormats(ajv)
-
-// Transform object sent to xadd into valid message
-redis.Command.setArgumentTransformer("xadd", function (args) {
-  if (args.length !== 3) return args
-
-  let argArray = []
-
-  argArray.push(args[0], args[1]) // Key Name & ID.
-
-  // Transform object into array of field name then value.
-  let fieldNameValuePairs = stringifyNestedObjects(args[2])
-
-  for (let [key, value] of Object.entries(fieldNameValuePairs)) {
-    argArray.push(key, value)
-  }
-
-  return argArray
-})
-
-// Transform array of key, values into an object when read with xread
-redis.Command.setReplyTransformer("xread", function (result) {
-  if (!Array.isArray(result)) return result
-
-  let newResult = []
-
-  for (let r of result[0][1]) {
-    let obj = {
-      id: r[0],
+  return async function (event) {
+    if (validate) {
+      let valid = validate(event)
+      if (!valid) throw new Error(JSON.stringify(validate.errors))
     }
 
-    let namesValues = r[1]
-
-    for (let n = 0; n < namesValues.length; n += 2) {
-      let value = namesValues[n + 1]
-
-      try {
-        value = JSON.parse(value)
-      } catch (err) {}
-
-      obj[namesValues[n]] = value
-    }
-
-    newResult.push(obj)
-  }
-
-  return newResult
-})
-
-export function add(redisClient, schema = {}) {
-  const validate = ajv.compile(schema)
-
-  return function (event) {
-    let valid = validate(event)
-    if (!valid) throw new Error(JSON.stringify(validate.errors))
-
-    let stream = event.stream
-    let id = "*"
-
-    return redisClient.pipeline().xadd(stream, id, event).exec()
+    return await Redis().pipeline().xadd(event.stream, "*", event).exec()
   }
 }
 
-export function read(redisClient, schema) {
-  return async function (stream, startingPoint) {
-    let redisStream = await redisClient
+export async function read() {
+  async function read(stream, startingPoint = 0) {
+    let redisStream = await Redis()
       .pipeline()
       .xread("STREAMS", stream, startingPoint)
       .exec()
 
     return redisStream[0][1]
   }
+
+  // allow direct calling
+  if (arguments) return read(arguments)
+
+  // enable similar interface to set even though a config is not used
+  return read
 }
 
-export function stringifyNestedObjects(obj) {
-  let nestedObjects = {}
-
-  for (let [key, value] of Object.entries(obj)) {
-    if (typeof value === "object" && value !== null) {
-      nestedObjects[key] = JSON.stringify(value)
-    }
-  }
-
-  return {
-    ...obj,
-    ...nestedObjects,
-  }
-}
-
-// TODO we probably want to have a separate instance of
-// the redis client here. This comes from the subscribe
-export function saveProjection(redisClient, schema) {
-  let validate
-  if (schema) validate = ajv.compile(schema)
-
-  return function (projection) {
-    if (validate) {
-      let valid = validate(projection)
-
-      if (!valid) throw new Error(JSON.stringify(validate.errors))
-    }
-
-    return redisClient.set(projection.id, "abc") //JSON.stringify(projection))
-  }
-}
-
-export function readProjection(redisClient) {
-  return function (projectionId) {
-    // TODO should it be projectionId? or aggregateId?
-    return redisClient.pipeline().get(projectionId).exec()
-  }
-}
-
-export async function subscribe(stream, callback) {
-  let client = redis.createClient(config)
+export async function subscribe({
+  handler = () => {},
+  stream = config.EVENT_STREAM,
+  client = Redis({ namespace: "subscription" }),
+} = {}) {
   let lastId = "$"
 
   // TODO What about a mechanism to pause the subscription
@@ -145,9 +58,7 @@ export async function subscribe(stream, callback) {
     let results = redisStream
     if (!results.length) continue
 
-    // TODO either get rid of this redis client,
-    // or create a new one and send that along
-    callback(results, client)
+    handler(results)
     lastId = results[results.length - 1].id
   }
 }
