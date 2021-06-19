@@ -1,19 +1,14 @@
 import Redis from "ioredis"
-import config from "../../config.js"
 import { stringifyNestedObjects } from "./utils.js"
 
 let instances = {}
 
-export default function createConnection({
-  namespace = "api",
-  db = 0,
-  connection = config.REDIS_CONNECTION,
-} = {}) {
+export default function createConnection({ namespace, config } = {}) {
   if (namespace && instances[namespace]) {
     return instances[namespace]
   }
 
-  const redisClient = new Redis(`${connection}/${db}`)
+  const redisClient = new Redis(`${config.REDIS_CONNECTION}/${config.REDIS_DB}`)
 
   if (namespace) {
     instances[namespace] = redisClient

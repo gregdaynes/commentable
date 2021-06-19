@@ -2,14 +2,7 @@ import { join } from "desm"
 import Fastify from "fastify"
 import autoload from "fastify-autoload"
 
-export default async function buildServer(config) {
-  const options = {
-    ...config,
-    logger: {
-      level: config.LOG_LEVEL,
-    },
-  }
-
+export default async function buildServer(options) {
   const fastify = Fastify(options)
 
   fastify.register(autoload, {
@@ -22,7 +15,7 @@ export default async function buildServer(config) {
     options,
   })
 
-  fastify.log.info(`${config.APP_NAME} is starting!`)
+  fastify.log.info(`${options.APP_NAME} is starting!`)
 
   return fastify
 }

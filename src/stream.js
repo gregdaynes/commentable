@@ -33,11 +33,7 @@ export async function read() {
   return read
 }
 
-export async function subscribe({
-  handler = () => {},
-  stream = config.EVENT_STREAM,
-  client = Redis({ namespace: "subscription" }),
-} = {}) {
+export async function subscribe({ handler = () => {}, stream, client } = {}) {
   let lastId = "$"
 
   // TODO What about a mechanism to pause the subscription
@@ -69,12 +65,12 @@ export async function subscribe({
 // through the CLI, provide a stream name to listen for events as well
 // as a module that exports a function to handle the events
 // `node --experimental-import-meta-resolve src/stream.js topic handler.js
-if (import.meta.resolve) {
-  if ((await import.meta.resolve(process.argv[1])) === import.meta.url) {
-    const { default: handler } = await import(
-      join(import.meta.url, process.argv[3])
-    )
-
-    await subscribe(process.argv[2], handler)
-  }
-}
+// if (import.meta.resolve) {
+//   if ((await import.meta.resolve(process.argv[1])) === import.meta.url) {
+//     const { default: handler } = await import(
+//       join(import.meta.url, process.argv[3])
+//     )
+//
+//     await subscribe(process.argv[2], handler)
+//   }
+// }
