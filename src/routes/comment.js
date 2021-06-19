@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto"
 import S from "fluent-json-schema"
-import { add, read } from "../stream.js"
+import { add, read, readProjection } from "../stream.js"
 import httpErrors from "http-errors"
 
 const schema = {
@@ -88,7 +88,7 @@ export default async function comment(fastify) {
         author,
       },
       payload: {
-        topic,
+        topic: filteredStream[0].payload.topic,
         body,
       },
     }
@@ -96,6 +96,15 @@ export default async function comment(fastify) {
     let [[, eventId]] = await produceEvent(event)
 
     return {}
+  })
+
+  fastify.get("/comment/:commentId", async (req) => {
+    let { commentId } = req.params
+
+    const projection = await readProjection(fastify.redis.consumer)(commentId)
+    console.log(projection)
+
+    return projection[0][1]
   })
 }
 

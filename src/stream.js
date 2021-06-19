@@ -101,17 +101,25 @@ export function stringifyNestedObjects(obj) {
 
 // TODO we probably want to have a separate instance of
 // the redis client here. This comes from the subscribe
-export function saveProjection(redisClient, schema = {}) {
-  const validate = ajv.compile(schema)
+export function saveProjection(redisClient, schema) {
+  let validate
+  if (schema) validate = ajv.compile(schema)
 
   return function (projection) {
-    let valid = validate(projection)
-    if (!valid) throw new Error(JSON.stringify(validate.errors))
+    if (validate) {
+      let valid = validate(projection)
 
-    return redisClient
-      .pipeline()
-      .set(projection.id, JSON.stringify(projection))
-      .exec()
+      if (!valid) throw new Error(JSON.stringify(validate.errors))
+    }
+
+    return redisClient.set(projection.id, "abc") //JSON.stringify(projection))
+  }
+}
+
+export function readProjection(redisClient) {
+  return function (projectionId) {
+    // TODO should it be projectionId? or aggregateId?
+    return redisClient.pipeline().get(projectionId).exec()
   }
 }
 
