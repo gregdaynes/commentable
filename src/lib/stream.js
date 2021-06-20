@@ -1,4 +1,4 @@
-import validation from "./lib/validation.js"
+import validation from "./validation.js"
 
 export function add({ schema, client }) {
   let validate = schema ? validation.compile(schema) : undefined

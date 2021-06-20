@@ -1,14 +1,11 @@
 import { randomUUID } from "crypto"
 import S from "fluent-json-schema"
-import { add, read } from "../stream.js"
-import { get } from "../projection.js"
+import { add, read } from "../lib/stream.js"
+import { get } from "../lib/redis.js"
 import httpErrors from "http-errors"
+import merge from "lodash.merge"
 
-const schema = {
-  body: S.object()
-    .prop("topic", S.string().required())
-    .prop("body", S.string().required()),
-}
+const schema = {}
 
 const eventSchema = S.object()
   .prop("aggregate", S.string().format(S.FORMATS.UUID).required())
@@ -26,19 +23,27 @@ const eventSchema = S.object()
   .prop(
     "payload",
     S.object()
-      .prop("topic", S.string().format(S.FORMATS.UUID).required())
+      .prop("topic", S.string().format(S.FORMATS.UUID))
       .prop("body", S.string().required())
   )
+  .valueOf()
 
 export default async function comment(fastify) {
   const produceEvent = add({
-    schema: eventSchema.valueOf(),
+    schema: eventSchema,
     client: fastify.redis,
   })
 
   fastify.post(
     "/comment",
-    { schema, onRequest: [fastify.authenticate] },
+    {
+      schema: {
+        body: S.object()
+          .prop("topic", S.string().required())
+          .prop("body", S.string().required()),
+      },
+      onRequest: [fastify.authenticate],
+    },
     async (req) => {
       let { body, topic } = req.body
       let { id: author } = req.user
@@ -71,23 +76,31 @@ export default async function comment(fastify) {
 
   fastify.put(
     "/comment/:commentId",
-    { schema, onRequest: [fastify.authenticate] },
+    {
+      schema: {
+        body: S.object().prop("body", S.string().required()),
+      },
+      onRequest: [fastify.authenticate],
+    },
     async (req) => {
       let { body } = req.body
       let { commentId } = req.params
       let { id: author } = req.user
 
-      const redisStream = await read("commentable", 0)
+      const redisStream = await read(fastify.redis)({ stream: "commentable" })
       const filteredStream = redisStream.filter(
         (item) => item.aggregate === commentId
       )
-
-      // TODO apply commit events (filteredStream) to a base object
 
       // Only the author of the original comment can update
       if (filteredStream[0].meta.author !== author) {
         console.log(filteredStream[0].meta.author, author)
         throw httpErrors.Unauthorized()
+      }
+
+      let currentState = {}
+      for (let commitedEvent of filteredStream) {
+        currentState = merge(currentState, commitedEvent)
       }
 
       let event = {
@@ -98,7 +111,7 @@ export default async function comment(fastify) {
           id: randomUUID(),
           timestamp: `${new Date().valueOf()}`,
           payloadVersion: 1,
-          revision: filteredStream.length,
+          revision: currentState.meta.revision + 1,
           author,
         },
         payload: {
@@ -106,18 +119,25 @@ export default async function comment(fastify) {
         },
       }
 
+      let newState = merge({}, currentState, event)
+      // TODO validate new state
+
       let [[, eventId]] = await produceEvent(event)
 
       return {}
     }
   )
 
-  fastify.get("/comment/:aggregate", async (req) => {
-    let { aggregate } = req.params
+  fastify.get(
+    "/comment/:aggregate",
+    { onRequest: [fastify.authenticate] },
+    async (req) => {
+      let { aggregate } = req.params
 
-    const comment = await get(aggregate)
-    console.log(comment)
+      const comment = await get(fastify.redis)(aggregate)
+      console.log(comment)
 
-    return comment[0][1]
-  })
+      return comment
+    }
+  )
 }

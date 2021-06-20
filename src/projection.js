@@ -1,7 +1,5 @@
-import Redis from "./lib/redis.js"
-import validation from "./lib/validation.js"
-import { read } from "./stream.js"
-import config from "../config.js"
+import { read } from "./lib/stream.js"
+import { set } from "./lib/redis.js"
 import S from "fluent-json-schema"
 
 const schema = S.object()
@@ -13,36 +11,6 @@ const schema = S.object()
   .prop("revision", S.number().required())
   .prop("topic", S.string().format(S.FORMATS.UUID).required())
   .valueOf()
-
-export function set({ schema, client }) {
-  let validate = schema ? validation.compile(schema) : undefined
-
-  return async function set(projection) {
-    if (validate) {
-      let valid = validate(projection)
-      if (!valid) throw new Error(JSON.stringify(validate.errors))
-    }
-
-    // NOTE setting a namespace here will only be effective in single process mode.
-    // the connection cannot be shared across processes
-    return await client
-      .pipeline()
-      .hset(projection.aggregate, Object.entries(projection).flat())
-      .exec()
-  }
-}
-
-export function get(client) {
-  return async function get(aggregate) {
-    // NOTE setting a namespace here will only be effective in single process mode.
-    // the connection cannot be shared across processes
-    try {
-      return await client.hgetall(aggregate)
-    } catch (err) {
-      console.log("big nasty error get", err)
-    }
-  }
-}
 
 export default function projection(client) {
   return async function projection([event]) {
@@ -64,12 +32,10 @@ export default function projection(client) {
         ...latestVersion,
         body: record.payload.body,
         revision: record.meta.revision,
-        topic: record.payload.topic,
+        ...(record.payload.topic && { topic: record.payload.topic }),
         updated: record.meta.timestamp,
       }
     }
-
-    console.log("here I am", latestVersion)
 
     await set({ schema, client })(latestVersion)
   }
