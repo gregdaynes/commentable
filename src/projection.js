@@ -12,8 +12,9 @@ const schema = S.object()
   .prop("author", S.string().format(S.FORMATS.UUID).required())
   .prop("revision", S.number().required())
   .prop("topic", S.string().format(S.FORMATS.UUID).required())
+  .valueOf()
 
-export function set(schema) {
+export function set({ schema, client }) {
   let validate = schema ? validation.compile(schema) : undefined
 
   return async function set(projection) {
@@ -24,54 +25,52 @@ export function set(schema) {
 
     // NOTE setting a namespace here will only be effective in single process mode.
     // the connection cannot be shared across processes
-    return await Redis()
+    return await client
       .pipeline()
       .hset(projection.aggregate, Object.entries(projection).flat())
       .exec()
   }
 }
 
-export function get() {
-  async function get(aggregate) {
+export function get(client) {
+  return async function get(aggregate) {
     // NOTE setting a namespace here will only be effective in single process mode.
     // the connection cannot be shared across processes
     try {
-      return await Redis().hgetall(aggregate)
+      return await client.hgetall(aggregate)
     } catch (err) {
       console.log("big nasty error get", err)
     }
   }
-
-  // allow direct calling
-  if (arguments) return get(arguments)
-
-  // enable similar interface to set even though a config is not used
-  return get
 }
 
-// TODO determine if the event here is really an array of events, or one event always in an array
-export default async function projection([event]) {
-  const redisStream = await read(config.EVENT_STREAM)
-  const aggregateRecords = redisStream.filter(
-    (record) => record.aggregate === event.aggregate
-  )
+export default function projection(client) {
+  return async function projection([event]) {
+    const redisStream = await read(client)({ stream: "commentable" })
 
-  let primeEvent = {
-    aggregate: aggregateRecords[0]?.aggregate || event.aggregate,
-    author: aggregateRecords[0]?.meta.author || event.meta.author,
-    created: aggregateRecords[0]?.meta.timestamp || event.meta.timestamp,
-  }
+    const aggregateRecords = redisStream.filter(
+      (record) => record.aggregate === event.aggregate
+    )
 
-  let latestVersion = { ...primeEvent }
-  for (let record of aggregateRecords) {
-    latestVersion = {
-      ...latestVersion,
-      body: record.payload.body,
-      revision: record.meta.revision,
-      topic: record.payload.topic,
-      updated: record.meta.timestamp,
+    let primeEvent = {
+      aggregate: aggregateRecords[0]?.aggregate || event.aggregate,
+      author: aggregateRecords[0]?.meta.author || event.meta.author,
+      created: aggregateRecords[0]?.meta.timestamp || event.meta.timestamp,
     }
-  }
 
-  await set(schema.valueOf())(latestVersion)
+    let latestVersion = { ...primeEvent }
+    for (let record of aggregateRecords) {
+      latestVersion = {
+        ...latestVersion,
+        body: record.payload.body,
+        revision: record.meta.revision,
+        topic: record.payload.topic,
+        updated: record.meta.timestamp,
+      }
+    }
+
+    console.log("here I am", latestVersion)
+
+    await set({ schema, client })(latestVersion)
+  }
 }

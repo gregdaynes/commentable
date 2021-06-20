@@ -1,41 +1,36 @@
-import { join } from "desm"
-import Redis from "./lib/redis.js"
 import validation from "./lib/validation.js"
-import config from "../config.js"
 
-export function add(schema) {
+export function add({ schema, client }) {
   let validate = schema ? validation.compile(schema) : undefined
 
-  return async function (event) {
+  return async function (event, xclient = client) {
     if (validate) {
       let valid = validate(event)
       if (!valid) throw new Error(JSON.stringify(validate.errors))
     }
 
-    return await Redis().pipeline().xadd(event.stream, "*", event).exec()
+    return await xclient.pipeline().xadd(event.stream, "*", event).exec()
   }
 }
 
-export async function read() {
-  async function read(stream, startingPoint = 0) {
-    let redisStream = await Redis()
+export function read(client) {
+  return async function read({ stream, startingPoint = 0 }) {
+    let redisStream = await client
       .pipeline()
       .xread("STREAMS", stream, startingPoint)
       .exec()
 
     return redisStream[0][1]
   }
-
-  // allow direct calling
-  if (arguments) return read(arguments)
-
-  // enable similar interface to set even though a config is not used
-  return read
 }
 
-export async function subscribe({ handler = () => {}, stream, client } = {}) {
-  let lastId = "$"
-
+export async function listenForMessage({
+  stream,
+  client,
+  handler,
+  lastId = "$",
+}) {
+  if (!handler) throw new Error(`Handler not defined for stream: ${stream}`)
   // TODO What about a mechanism to pause the subscription
   // or even throttle the checks on a timer. Would need some
   // sort of resume normal operations as well.
@@ -54,23 +49,7 @@ export async function subscribe({ handler = () => {}, stream, client } = {}) {
     let results = redisStream
     if (!results.length) continue
 
-    handler(results)
+    await handler(results)
     lastId = results[results.length - 1].id
   }
 }
-
-// Use stream as a standalone application
-// requires NodeJS to be executed using the flag
-// `--experimental-import-meta-resolve`
-// through the CLI, provide a stream name to listen for events as well
-// as a module that exports a function to handle the events
-// `node --experimental-import-meta-resolve src/stream.js topic handler.js
-// if (import.meta.resolve) {
-//   if ((await import.meta.resolve(process.argv[1])) === import.meta.url) {
-//     const { default: handler } = await import(
-//       join(import.meta.url, process.argv[3])
-//     )
-//
-//     await subscribe(process.argv[2], handler)
-//   }
-// }

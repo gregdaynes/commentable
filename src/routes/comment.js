@@ -30,9 +30,12 @@ const eventSchema = S.object()
       .prop("body", S.string().required())
   )
 
-const produceEvent = add(eventSchema.valueOf())
-
 export default async function comment(fastify) {
+  const produceEvent = add({
+    schema: eventSchema.valueOf(),
+    client: fastify.redis,
+  })
+
   fastify.post(
     "/comment",
     { schema, onRequest: [fastify.authenticate] },

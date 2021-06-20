@@ -2,7 +2,7 @@
   "name": "commentable",
   "version": "1.0.0",
   "description": "Commentable is a small service designed to handle comments for a topic.",
-  "main": "src/server.js",
+  "main": "bin/server.js",
   "type": "module",
   "scripts": {
     "start": "nodemon",

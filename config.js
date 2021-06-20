@@ -10,6 +10,7 @@ const schema = S.object()
   .prop("JWT_SECRET", S.string().required())
   .prop("LOG_LEVEL", S.string().default("info"))
   .prop("REDIS_CONNECTION", S.string().default("redis://127.0.0.1:6379"))
+  .prop("REDIS_DB", S.string().default(0))
   .prop("SINGLE_PROCESS_MODE", S.boolean().default(true))
 
 export default envSchema({
