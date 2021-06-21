@@ -1,5 +1,5 @@
 import Redis from "ioredis"
-import validation from "./validation.js"
+
 import { stringifyNestedObjects } from "./utils.js"
 
 let instances = {}
@@ -11,12 +11,22 @@ export default function createConnection({ namespace, config } = {}) {
 
   const redisClient = new Redis(`${config.REDIS_CONNECTION}/${config.REDIS_DB}`)
 
+  const proxyClient = new Proxy(redisClient, {
+    get: function (target, property) {
+      if (property === "disconnect" || property === "quit") {
+        delete instances.namespace
+      }
+
+      return target[property]
+    },
+  })
+
   if (namespace) {
-    instances[namespace] = redisClient
+    instances[namespace] = proxyClient
     return instances[namespace]
   }
 
-  return redisClient
+  return proxyClient
 }
 
 // Transform object sent to xadd into valid message
@@ -67,33 +77,3 @@ Redis.Command.setReplyTransformer("xread", function (result) {
 
   return newResult
 })
-
-export function set({ schema, client }) {
-  let validate = schema ? validation.compile(schema) : undefined
-
-  return async function set(projection) {
-    if (validate) {
-      let valid = validate(projection)
-      if (!valid) throw new Error(JSON.stringify(validate.errors))
-    }
-
-    // NOTE setting a namespace here will only be effective in single process mode.
-    // the connection cannot be shared across processes
-    return await client
-      .pipeline()
-      .hset(projection.aggregate, Object.entries(projection).flat())
-      .exec()
-  }
-}
-
-export function get(client) {
-  return async function get(aggregate) {
-    // NOTE setting a namespace here will only be effective in single process mode.
-    // the connection cannot be shared across processes
-    try {
-      return await client.hgetall(aggregate)
-    } catch (err) {
-      console.log("big nasty error get", err)
-    }
-  }
-}

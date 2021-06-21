@@ -1,27 +1,14 @@
-import validation from "./validation.js"
-
-export function add({ schema, client }) {
-  let validate = schema ? validation.compile(schema) : undefined
-
-  return async function (event, xclient = client) {
-    if (validate) {
-      let valid = validate(event)
-      if (!valid) throw new Error(JSON.stringify(validate.errors))
-    }
-
-    return await xclient.pipeline().xadd(event.stream, "*", event).exec()
-  }
+export async function add({ client, event } = {}) {
+  return await client.pipeline().xadd(event.stream, "*", event).exec()
 }
 
-export function read(client) {
-  return async function read({ stream, startingPoint = 0 }) {
-    let redisStream = await client
-      .pipeline()
-      .xread("STREAMS", stream, startingPoint)
-      .exec()
+export async function read({ client, stream, startingPoint = 0 }) {
+  let redisStream = await client
+    .pipeline()
+    .xread("STREAMS", stream, startingPoint)
+    .exec()
 
-    return redisStream[0][1]
-  }
+  return redisStream[0][1]
 }
 
 export async function listenForMessage({
