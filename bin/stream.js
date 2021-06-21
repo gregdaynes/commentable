@@ -1,16 +1,18 @@
 #!/bin/env/node
 
-import config from "../config.js"
 import { join } from "desm"
+import config from "../config.js"
 import log from "../src/lib/log.js"
 import redisClient from "../src/lib/redis.js"
-// TODO this should move to lib
-import { listenForMessage, add } from "../src/stream.js"
+import { listenForMessage, add } from "../src/lib/stream.js"
 
+let handler
 if (process.argv[3]) {
-  const { default: handler } = await import(
+  const { default: handle } = await import(
     join(import.meta.url, process.argv[3])
   )
+
+  handler = handle
 }
 
 const client = redisClient({ config, namespace: "subscription" })
@@ -20,5 +22,5 @@ log({ config }).info(`Subscribing to %s`, [process.argv[2]])
 await listenForMessage({
   stream: process.argv[2],
   client,
-  handler: (...args) => console.log(args),
+  handler: handler(handlerClient),
 })

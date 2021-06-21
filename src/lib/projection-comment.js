@@ -1,5 +1,5 @@
-import { read } from "./lib/stream.js"
-import { set } from "./lib/redis.js"
+import { read } from "./stream.js"
+import { set } from "./redis.js"
 import S from "fluent-json-schema"
 
 const schema = S.object()

@@ -5,8 +5,6 @@ import { get } from "../lib/redis.js"
 import httpErrors from "http-errors"
 import merge from "lodash.merge"
 
-const schema = {}
-
 const eventSchema = S.object()
   .prop("aggregate", S.string().format(S.FORMATS.UUID).required())
   .prop("stream", S.string().required())
@@ -26,11 +24,10 @@ const eventSchema = S.object()
       .prop("topic", S.string().format(S.FORMATS.UUID))
       .prop("body", S.string().required())
   )
-  .valueOf()
 
 export default async function comment(fastify) {
   const produceEvent = add({
-    schema: eventSchema,
+    schema: eventSchema.valueOf(),
     client: fastify.redis,
   })
 

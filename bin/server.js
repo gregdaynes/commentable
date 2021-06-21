@@ -3,7 +3,7 @@
 import buildServer from "../src/index.js"
 import config from "../config.js"
 import { listenForMessage } from "../src/lib/stream.js"
-import projection from "../src/projection.js"
+import projectionComment from "../src/lib/projection-comment.js"
 import redisClient from "../src/lib/redis.js"
 import log from "../src/lib/log.js"
 
@@ -21,7 +21,7 @@ try {
   if (config.SINGLE_PROCESS_MODE) {
     // Subscribe to streams and send to specific projection
     await listenForMessage({
-      handler: projection(client),
+      handler: projectionComment(client),
       stream: config.EVENT_STREAM,
       // Use a different redis connection, the subscribe is a blocking loop
       client: redisClient({ config, namespace: "subscription" }),
