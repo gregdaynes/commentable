@@ -15,13 +15,14 @@ export async function listenForMessage({
   stream,
   client,
   handler,
-  lastId = "$",
+  handlerClient,
 }) {
+  let lastId = "$"
+  let locked = false
+
   if (!handler) throw new Error(`Handler not defined for stream: ${stream}`)
-  // TODO What about a mechanism to pause the subscription
-  // or even throttle the checks on a timer. Would need some
-  // sort of resume normal operations as well.
-  while (true) {
+
+  setInterval(async () => {
     let redisStream = await client.xread(
       "BLOCK",
       "5000",
@@ -31,12 +32,14 @@ export async function listenForMessage({
       stream,
       lastId
     )
-    if (!redisStream) continue
+
+    if (!redisStream) return
 
     let results = redisStream
-    if (!results.length) continue
+    if (!results.length) return
 
-    await handler(results)
+    await handler({ client: handlerClient, event: results[0] })
+
     lastId = results[results.length - 1].id
-  }
+  }, 1000)
 }

@@ -15,12 +15,10 @@ if (process.argv[3]) {
   handler = handle
 }
 
-const client = redisClient({ config, namespace: "subscription" })
-const handlerClient = redisClient({ config, namespace: "handler" })
-
 log({ config }).info(`Subscribing to %s`, [process.argv[2]])
 await listenForMessage({
+  handler,
   stream: process.argv[2],
-  client,
-  handler: handler(handlerClient),
+  client: redisClient({ config, namespace: "subscription" }),
+  handlerClient: redisClient({ config, namespace: "handler" }),
 })
