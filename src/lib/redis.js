@@ -54,10 +54,7 @@ Redis.Command.setReplyTransformer("xread", function (result) {
   let newResult = []
 
   for (let r of result[0][1]) {
-    let obj = {
-      id: r[0],
-    }
-
+    let obj = {}
     let namesValues = r[1]
 
     for (let n = 0; n < namesValues.length; n += 2) {
@@ -71,6 +68,8 @@ Redis.Command.setReplyTransformer("xread", function (result) {
 
       obj[namesValues[n]] = value
     }
+
+    obj.id = r[0]
 
     newResult.push(obj)
   }

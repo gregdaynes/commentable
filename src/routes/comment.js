@@ -62,6 +62,10 @@ export default async function routeComment(fastify) {
 
       const currentState = await fetchAggregate({ client, aggregate })
 
+      if (!currentState.meta) {
+        throw httpErrors.NotAcceptable()
+      }
+
       if (currentState.meta.author !== author) {
         throw httpErrors.Unauthorized()
       }

@@ -2,7 +2,7 @@
   "name": "commentable",
   "version": "1.0.0",
   "description": "Commentable is a small service designed to handle comments for a topic.",
-  "main": "bin/server.js",
+  "main": "bin/api.js",
   "type": "module",
   "scripts": {
     "start": "nodemon",
@@ -27,6 +27,7 @@
     "@istanbuljs/esm-loader-hook": "^0.1.2",
     "eslint": "^7.28.0",
     "nodemon": "^2.0.7",
+    "pino-pretty": "^5.0.2",
     "prettier": "^2.3.1",
     "sinon": "^11.1.1",
     "tap": "^15.0.9"

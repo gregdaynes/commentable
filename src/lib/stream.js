@@ -11,35 +11,30 @@ export async function read({ client, stream, startingPoint = 0 }) {
   return redisStream[0][1]
 }
 
-export async function listenForMessage({
-  stream,
-  client,
-  handler,
-  handlerClient,
-}) {
-  let lastId = "$"
-  let locked = false
-
+export async function listenForMessage({ stream, client, handler, lastId }) {
   if (!handler) throw new Error(`Handler not defined for stream: ${stream}`)
 
-  setInterval(async () => {
+  while (true) {
     let redisStream = await client.xread(
       "BLOCK",
-      "5000",
+      5000,
       "COUNT",
-      100,
+      2,
       "STREAMS",
       stream,
       lastId
     )
 
-    if (!redisStream) return
+    if (!redisStream) {
+      return
+    }
 
     let results = redisStream
-    if (!results.length) return
+    if (!results.length) {
+      return
+    }
 
-    await handler({ client: handlerClient, event: results[0] })
-
+    await handler(results)
     lastId = results[results.length - 1].id
-  }, 1000)
+  }
 }

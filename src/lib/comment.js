@@ -39,39 +39,42 @@ const eventSchema = S.object()
   )
 
 export default async function projection({ client, event }) {
-  console.log("building projection", event)
-  // const redisStream = await read({ client, stream: config.EVENT_STREAM })
-  // const aggregateRecords = redisStream.filter(
-  //   (record) => record.aggregate === event.aggregate
-  // )
-  //
-  // let primeEvent = {
-  //   aggregate: aggregateRecords[0]?.aggregate || event.aggregate,
-  //   author: aggregateRecords[0]?.meta.author || event.meta.author,
-  //   created: aggregateRecords[0]?.meta.timestamp || event.meta.timestamp,
-  // }
-  //
-  // let latestVersion = { ...primeEvent }
-  // for (let record of aggregateRecords) {
-  //   latestVersion = {
-  //     ...latestVersion,
-  //     body: record.payload.body,
-  //     revision: record.meta.revision,
-  //     ...(record.payload.topic && { topic: record.payload.topic }),
-  //     updated: record.meta.timestamp,
-  //   }
-  // }
-  //
-  // try {
-  //   const validProjection = validateProjection({
-  //     schema: projectionSchema.valueOf(),
-  //     projection: latestVersion,
-  //   })
-  //   await set({ client, projection: validProjection })
-  //   return true
-  // } catch (err) {
-  //   console.log(err)
-  // }
+  const redisStream = await read({ client, stream: config.EVENT_STREAM })
+  const aggregateRecords = redisStream.filter(
+    (record) => record.aggregate === event.aggregate
+  )
+  if (!aggregateRecords.length) return
+
+  console.log("updatint projection event")
+
+  let primeEvent = {
+    aggregate: aggregateRecords[0]?.aggregate || event.aggregate,
+    author: aggregateRecords[0]?.meta.author || event.meta.author,
+    created: aggregateRecords[0]?.meta.timestamp || event.meta.timestamp,
+  }
+
+  let latestVersion = { ...primeEvent }
+  for (let record of aggregateRecords) {
+    latestVersion = {
+      ...latestVersion,
+      body: record.payload.body,
+      revision: record.meta.revision,
+      ...(record.payload.topic && { topic: record.payload.topic }),
+      updated: record.meta.timestamp,
+    }
+  }
+
+  try {
+    const validProjection = validateProjection({
+      schema: projectionSchema.valueOf(),
+      projection: latestVersion,
+    })
+    console.log("updated projection", validProjection)
+    await set({ client, projection: validProjection })
+    return true
+  } catch (err) {
+    console.log(err)
+  }
 }
 
 export async function fetchProjection({ client, aggregate }) {
@@ -121,6 +124,7 @@ export function createEvent({
 }
 
 export async function storeEvent({ event, client }) {
+  delete event.id
   let [[, eventId]] = await add({ client, event })
 
   return { ...event, eventId }

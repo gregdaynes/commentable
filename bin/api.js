@@ -19,12 +19,17 @@ try {
   await fastify.listen(config.HTTP_PORT, config.HTTP_HOST)
 
   if (config.SINGLE_PROCESS_MODE) {
-    // Subscribe to streams and send to specific projection
     await listenForMessage({
-      handler: projectionComment(client),
       stream: config.EVENT_STREAM,
-      // Use a different redis connection, the subscribe is a blocking loop
       client: redisClient({ config, namespace: "subscription" }),
+      lastId: 0,
+      handler(events) {
+        if (!events.length) return
+
+        for (let event of events) {
+          return projectionComment({ client: fastify.redis, event })
+        }
+      },
     })
   }
 } catch (err) {
