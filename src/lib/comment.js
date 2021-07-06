@@ -38,7 +38,6 @@ const eventSchema = S.object()
   )
 
 export default async function projection({ client, event }) {
-  console.log("Creating projection for %s", [event.aggregate])
   const redisStream = await read({ client, stream: config.EVENT_STREAM })
   const aggregateRecords = redisStream.filter(
     (record) => record.aggregate === event.aggregate
